@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <title>Encuesta de Satisfacción Laboral</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-3">
+        <h1>Encuesta de Satisfacción Laboral</h1>
+        <div class="filters">
+            <select id="filter-centro" class="form-control mb-2">
+                <option value="">Seleccione un Centro</option>
+            </select>
+            <select id="filter-sexo" class="form-control mb-2">
+                <option value="">Seleccione el Sexo</option>
+                <option value="Hombre">Hombre</option>
+                <option value="Mujer">Mujer</option>
+                <option value="no responde">No responde</option>
+            </select>
+            <select id="filter-edad" class="form-control mb-2">
+                <option value="">Seleccione la Edad</option>
+            </select>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Edad</th>
+                    <th>Puesto</th>
+                    <th>Centro de Trabajo</th>
+                    <th>Sexo</th>
+                    <th>Años en la Empresa</th>
+                </tr>
+            </thead>
+            <tbody id="data-rows">
+            </tbody>
+        </table>
+        <div>
+            <canvas id="myChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let allData = [];
+            let myChart; // Variable global para almacenar la instancia del gráfico
+
+            function loadData() {
+                fetch('encuesta.json')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    allData = data;
+                    populateFilters(data);
+                    updateTable(data);
+                    updateStatistics(data);
+                })
+                .catch(error => {
+                    console.error('Error loading the data:', error);
+                    alert('Hubo un problema al cargar los datos. Por favor, inténtelo de nuevo más tarde.');
+                });
+            }
+
+            function populateFilters(data) {
+                let centros = [...new Set(data.map(item => item.centro_de_trabajo))].sort();
+                let edades = [...new Set(data.map(item => item.edad))].sort((a, b) => a - b);
+
+                const centroSelect = document.getElementById('filter-centro');
+                const edadSelect = document.getElementById('filter-edad');
+
+                centroSelect.innerHTML = '<option value="">Todos</option>';
+                edades.forEach(edad => {
+                    edadSelect.innerHTML += `<option value="${edad}">${edad}</option>`;
+                });
+
+                centros.forEach(centro => {
+                    centroSelect.innerHTML += `<option value="${centro}">${centro}</option>`;
+                });
+            }
+
+            function updateTable(data) {
+                const tableBody = document.getElementById('data-rows');
+                tableBody.innerHTML = '';
+                data.forEach(item => {
+                    tableBody.innerHTML += `<tr>
+                        <td>${item.edad}</td>
+                        <td>${item.puesto}</td>
+                        <td>${item.centro_de_trabajo}</td>
+                        <td>${item.sexo}</td>
+                        <td>${item.anos_en_la_empresa}</td>
+                    </tr>`;
+                });
+            }
+
+            function updateStatistics(data) {
+                const questions = Object.keys(data[0]).filter(key => key.match(/\(1-10\)$/));
+                const averages = questions.map(question => {
+                    const sum = data.reduce((acc, cur) => acc + cur[question], 0);
+                    return { question: question.replace(/_/g, " ").replace(/\(1-10\)$/, ""), average: sum / data.length };
+                });
+
+                const ctx = document.getElementById('myChart').getContext('2d');
+
+                if (myChart) {
+                    myChart.destroy(); // Destruye el gráfico existente antes de crear uno nuevo
+                }
+
+                myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: averages.map(stat => stat.question),
+                        datasets: [{
+                            label: 'Average Score',
+                            data: averages.map(stat => stat.average),
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            document.getElementById('filter-centro').addEventListener('change', filterData);
+            document.getElementById('filter-sexo').addEventListener('change', filterData);
+            document.getElementById('filter-edad').addEventListener('change', filterData);
+
+            function filterData() {
+                const centro = document.getElementById('filter-centro').value;
+                const sexo = document.getElementById('filter-sexo').value;
+                const edad = document.getElementById('filter-edad').value;
+
+                let filteredData = allData.filter(item => {
+                    return (centro ? item.centro_de_trabajo === centro : true) &&
+                           (sexo ? item.sexo === sexo : true) &&
+                           (edad ? item.edad == edad : true);
+                });
+
+                updateTable(filteredData);
+                updateStatistics(filteredData);
+            }
+
+            loadData();
+        });
+    </script>
+</body>
+</html>
